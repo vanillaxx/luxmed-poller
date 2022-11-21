@@ -1,4 +1,4 @@
-package auth
+package client
 
 import (
 	"compress/gzip"
@@ -9,7 +9,14 @@ import (
 	"net/url"
 	"strings"
 
+	"github.com/vanillaxx/luxmed-poller/internal/visit"
 	"golang.org/x/oauth2"
+)
+
+const (
+	BaseUrl       = "https://portalpacjenta.luxmed.pl/PatientPortalMobileAPI/api"
+	TokenEndpoint = "token"
+	TermsEndpoint = "visits/available-terms"
 )
 
 type User struct {
@@ -21,10 +28,15 @@ type LuxmedClient struct {
 	*http.Client
 }
 
-const (
-	LoginUrl       = "https://portalpacjenta.luxmed.pl/PatientPortalMobileAPI/api/token"
-	ReservationURL = "https://portalpacjenta.luxmed.pl/PatientPortalMobileAPI/api/visits/available-terms"
-)
+type Params map[string]string
+
+func (p *Params) mapToUrlParams() string {
+	data := url.Values{}
+	for k, v := range *p {
+		data.Set(k, v)
+	}
+	return data.Encode()
+}
 
 func getHeaders() map[string]string {
 	return map[string]string{
@@ -46,26 +58,18 @@ func getParams(u User) map[string]string {
 	}
 }
 
-func (c *LuxmedClient) AuthenticatedRequest(u User, method string, urlAddress string) (*http.Request, error) {
-	t, err := c.GetToken(u)
+// authenticatedRequest creates an Oauth2 authenticated request
+func (lc *LuxmedClient) authenticatedRequest(u User, method, url string, p *Params) (*http.Request, error) {
+	t, err := lc.getToken(u)
 	if err != nil {
 		return nil, err
 	}
 
-	data := url.Values{}
-	params := map[string]string{}
-	params["cityId"] = "3"
-	params["payerId"] = "123"
-	params["serviceId"] = "4430"
-	//params["LanguageId"] = "10"
-	params["FromDate"] = "2022-11-18" // time.Now().Format(time.RFC3339Nano)
-	params["ToDate"] = "2022-11-28"   // time.Now().AddDate(0, 0, 10).Format(time.RFC3339Nano)
-	for k, v := range params {
-		data.Set(k, v)
+	if len(*p) > 0 {
+		url = fmt.Sprintf("%s?%s", url, p.mapToUrlParams())
 	}
-	fmt.Printf("%s\n\n", data.Encode())
 
-	req, err := http.NewRequest(method, fmt.Sprintf("%s?%s", urlAddress, data.Encode()), nil)
+	req, err := http.NewRequest(method, url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("err while creating new request: %s", err)
 	}
@@ -73,12 +77,41 @@ func (c *LuxmedClient) AuthenticatedRequest(u User, method string, urlAddress st
 		req.Header.Set(h, v)
 	}
 	req.Header.Set("Authorization", fmt.Sprintf("%s %s", t.TokenType, t.AccessToken))
-
 	return req, nil
 }
 
-// GetToken returns token for given username and
-func (lc *LuxmedClient) GetToken(u User) (*oauth2.Token, error) {
+// GetVisitTerms returns a list of visit terms for given parameters
+func (lc *LuxmedClient) GetVisitTerms(u User, p *Params) ([]visit.VisitTerm, error) {
+	req, err := lc.authenticatedRequest(u, http.MethodGet, fmt.Sprintf("%s/%s", BaseUrl, TermsEndpoint), p)
+	if err != nil {
+		return nil, fmt.Errorf("create request for getting visit terms: %s", err)
+	}
+	res, err := lc.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("execute request for getting visit terms: %s", err)
+	}
+	defer res.Body.Close()
+	gzreader, err := gzip.NewReader(res.Body)
+	if err != nil {
+		return nil, fmt.Errorf("create gzip reader: %s", err)
+	}
+	defer gzreader.Close()
+	bytes, err := ioutil.ReadAll(gzreader)
+	if err != nil {
+		return nil, fmt.Errorf("read visit terms with gzip reader: %s", err)
+	}
+	if err != nil {
+		return nil, err
+	}
+	resp := &visit.VisitTermsResponse{}
+	if err = json.Unmarshal(bytes, resp); err != nil {
+		return nil, fmt.Errorf("unmarshal visit terms: %s", err)
+	}
+	return resp.VisitTerms, nil
+}
+
+// GetToken returns authentication token for given User
+func (lc *LuxmedClient) getToken(u User) (*oauth2.Token, error) {
 	headers := getHeaders()
 	params := getParams(u)
 
@@ -87,7 +120,7 @@ func (lc *LuxmedClient) GetToken(u User) (*oauth2.Token, error) {
 		data.Set(k, v)
 	}
 
-	req, err := http.NewRequest("POST", LoginUrl, strings.NewReader(data.Encode()))
+	req, err := http.NewRequest(http.MethodPost, fmt.Sprintf("%s/%s", BaseUrl, TokenEndpoint), strings.NewReader(data.Encode()))
 	if err != nil {
 		return nil, fmt.Errorf("Err while creating new request: %s", err)
 	}
@@ -95,17 +128,12 @@ func (lc *LuxmedClient) GetToken(u User) (*oauth2.Token, error) {
 		req.Header.Set(h, v)
 	}
 
-	// cj, err := cookiejar.New(&cookiejar.Options{PublicSuffixList: publicsuffix.List})
-	lc.Client = &http.Client{
-		// Jar: cj,
-	}
-	// lc := LuxmedClient{client: client}
+	lc.Client = &http.Client{}
 	res, err := lc.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("Err while sending POST request: %s", err)
 	}
 	defer res.Body.Close()
-	// res.Cookies()
 
 	gzreader, err := gzip.NewReader(res.Body)
 	if err != nil {
