@@ -28,6 +28,11 @@ type LuxmedClient struct {
 	*http.Client
 }
 
+// NewLuxmedClient returns client to luxmed API
+func NewLuxmedClient() LuxmedClient {
+	return LuxmedClient{&http.Client{}}
+}
+
 type Params map[string]string
 
 func (p *Params) mapToUrlParams() string {
@@ -49,35 +54,13 @@ func getHeaders() map[string]string {
 	}
 }
 
-func getParams(u User) map[string]string {
+func getParams(u User) Params {
 	return map[string]string{
 		"client_id":  "iPhone",
 		"grant_type": "password",
 		"username":   u.Username,
 		"password":   u.Password,
 	}
-}
-
-// authenticatedRequest creates an Oauth2 authenticated request
-func (lc *LuxmedClient) authenticatedRequest(u User, method, url string, p *Params) (*http.Request, error) {
-	t, err := lc.getToken(u)
-	if err != nil {
-		return nil, err
-	}
-
-	if len(*p) > 0 {
-		url = fmt.Sprintf("%s?%s", url, p.mapToUrlParams())
-	}
-
-	req, err := http.NewRequest(method, url, nil)
-	if err != nil {
-		return nil, fmt.Errorf("err while creating new request: %s", err)
-	}
-	for h, v := range getHeaders() {
-		req.Header.Set(h, v)
-	}
-	req.Header.Set("Authorization", fmt.Sprintf("%s %s", t.TokenType, t.AccessToken))
-	return req, nil
 }
 
 // GetVisitTerms returns a list of visit terms for given parameters
@@ -110,43 +93,61 @@ func (lc *LuxmedClient) GetVisitTerms(u User, p *Params) ([]visit.VisitTerm, err
 	return resp.VisitTerms, nil
 }
 
-// GetToken returns authentication token for given User
-func (lc *LuxmedClient) getToken(u User) (*oauth2.Token, error) {
-	headers := getHeaders()
-	params := getParams(u)
-
-	data := url.Values{}
-	for k, v := range params {
-		data.Set(k, v)
+// authenticatedRequest creates an Oauth2 authenticated request
+func (lc *LuxmedClient) authenticatedRequest(u User, method, url string, p *Params) (*http.Request, error) {
+	t, err := lc.getToken(u)
+	if err != nil {
+		return nil, err
 	}
 
-	req, err := http.NewRequest(http.MethodPost, fmt.Sprintf("%s/%s", BaseUrl, TokenEndpoint), strings.NewReader(data.Encode()))
+	if len(*p) > 0 {
+		url = fmt.Sprintf("%s?%s", url, p.mapToUrlParams())
+	}
+
+	req, err := http.NewRequest(method, url, nil)
 	if err != nil {
-		return nil, fmt.Errorf("Err while creating new request: %s", err)
+		return nil, fmt.Errorf("err while creating new request: %s", err)
+	}
+	for h, v := range getHeaders() {
+		req.Header.Set(h, v)
+	}
+	req.Header.Set("Authorization", fmt.Sprintf("%s %s", t.TokenType, t.AccessToken))
+	return req, nil
+}
+
+// getToken returns authentication token for given User
+func (lc *LuxmedClient) getToken(u User) (*oauth2.Token, error) {
+	headers := getHeaders()
+	p := getParams(u)
+
+	encodedParams := p.mapToUrlParams()
+	wholeUrl := fmt.Sprintf("%s/%s", BaseUrl, TokenEndpoint)
+	req, err := http.NewRequest(http.MethodPost, wholeUrl, strings.NewReader(encodedParams))
+	if err != nil {
+		return nil, fmt.Errorf("err while creating new request: %s", err)
 	}
 	for h, v := range headers {
 		req.Header.Set(h, v)
 	}
 
-	lc.Client = &http.Client{}
 	res, err := lc.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("Err while sending POST request: %s", err)
+		return nil, fmt.Errorf("err while sending POST request: %s", err)
 	}
 	defer res.Body.Close()
 
 	gzreader, err := gzip.NewReader(res.Body)
 	if err != nil {
-		return nil, fmt.Errorf("Err while creating gzip reader: %s", err)
+		return nil, fmt.Errorf("err while creating gzip reader: %s", err)
 	}
 	defer gzreader.Close()
 	bytes, err := ioutil.ReadAll(gzreader)
 	if err != nil {
-		return nil, fmt.Errorf("Err while reading with gzip reader: %s", err)
+		return nil, fmt.Errorf("err while reading with gzip reader: %s", err)
 	}
 	resp := &oauth2.Token{}
 	if err = json.Unmarshal(bytes, &resp); err != nil {
-		return nil, fmt.Errorf("Err while unmarshalling token: %s", err)
+		return nil, fmt.Errorf("err while unmarshalling token: %s", err)
 	}
 	return resp, nil
 }

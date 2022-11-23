@@ -13,7 +13,7 @@ func main() {
 		Username: "username",
 		Password: "password",
 	}
-	lc := client.LuxmedClient{}
+	lc := client.NewLuxmedClient()
 	data := &client.Params{
 		"cityId":    "3",
 		"payerId":   "123",
@@ -23,7 +23,7 @@ func main() {
 	}
 	vt, err := lc.GetVisitTerms(u, data)
 	if err != nil {
-		fmt.Printf("%s", err)
+		fmt.Printf("Err while getting visit terms: %s", err)
 		os.Exit(1)
 	}
 	fmt.Printf("%+v", vt)

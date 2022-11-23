@@ -1,12 +1,12 @@
 package visit
 
 type Clinic struct {
-	Id   int    `json:"Id"`
+	ID   int    `json:"Id"`
 	Name string `json:"Name"`
 }
 
 type Doctor struct {
-	Id   int    `json:"Id"`
+	ID   int    `json:"Id"`
 	Name string `json:"Name"`
 }
 
@@ -22,13 +22,13 @@ type VisitDate struct {
 }
 
 type VisitTerm struct {
-	ServiceId                 int           `json:"ServiceId"`
+	ServiceID                 int           `json:"ServiceId"`
 	Clinic                    Clinic        `json:"Clinic"`
 	Impediment                Impediment    `json:"Impediment,omitempty"`
 	VisitDate                 VisitDate     `json:"VisitDate"`
 	IsFree                    bool          `json:"IsFree"`
-	RoomId                    int           `json:"RoomId"`
-	ScheduleId                int           `json:"ScheduleId"`
+	RoomID                    int           `json:"RoomId"`
+	ScheduleID                int           `json:"ScheduleId"`
 	ReferralRequiredByService bool          `json:"ReferralRequiredByService"`
 	ReferralRequiredByProduct bool          `json:"ReferralRequiredByProduct"`
 	PayerDetailsList          []interface{} `json:"PayerDetailsList"`
@@ -41,5 +41,5 @@ type DateRange struct {
 
 type VisitTermsResponse struct {
 	VisitTerms      []VisitTerm `json:"AvailableVisitsTermPresentation"`
-	SearchDateRange DateRange         `json:"SearchDateRange"`
+	SearchDateRange DateRange   `json:"SearchDateRange"`
 }
