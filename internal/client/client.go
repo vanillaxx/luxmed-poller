@@ -26,11 +26,12 @@ type User struct {
 
 type LuxmedClient struct {
 	*http.Client
+	Url string
 }
 
 // NewLuxmedClient returns client to luxmed API
-func NewLuxmedClient() LuxmedClient {
-	return LuxmedClient{&http.Client{}}
+func NewLuxmedClient(url string) LuxmedClient {
+	return LuxmedClient{&http.Client{}, url}
 }
 
 type Params map[string]string
@@ -65,7 +66,7 @@ func getParams(u User) Params {
 
 // GetVisitTerms returns a list of visit terms for given parameters
 func (lc *LuxmedClient) GetVisitTerms(u User, p *Params) ([]visit.VisitTerm, error) {
-	req, err := lc.authenticatedRequest(u, http.MethodGet, fmt.Sprintf("%s/%s", BaseUrl, TermsEndpoint), p)
+	req, err := lc.authenticatedRequest(u, http.MethodGet, fmt.Sprintf("%s/%s", lc.Url, TermsEndpoint), p)
 	if err != nil {
 		return nil, fmt.Errorf("create request for getting visit terms: %s", err)
 	}
@@ -121,7 +122,7 @@ func (lc *LuxmedClient) getToken(u User) (*oauth2.Token, error) {
 	p := getParams(u)
 
 	encodedParams := p.mapToUrlParams()
-	wholeUrl := fmt.Sprintf("%s/%s", BaseUrl, TokenEndpoint)
+	wholeUrl := fmt.Sprintf("%s/%s", lc.Url, TokenEndpoint)
 	req, err := http.NewRequest(http.MethodPost, wholeUrl, strings.NewReader(encodedParams))
 	if err != nil {
 		return nil, fmt.Errorf("err while creating new request: %s", err)
