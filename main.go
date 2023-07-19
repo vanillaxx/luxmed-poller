@@ -14,14 +14,21 @@ func main() {
 		fmt.Printf("new: %s", err)
 		os.Exit(1)
 	}
-	serviceVariantId := "4502"
-	from := "2023-07-18"
+	services, err := lc.GetAvailableServices()
+	if err != nil {
+		fmt.Printf("get available services: %s", err)
+		os.Exit(1)
+	}
+	fmt.Printf("available services: %v", services)
+
+	serviceVariantId := "4565"
+	from := "2023-07-19"
 	to := "2023-07-30"
-	result, err := lc.GetAvailableTerms(serviceVariantId, from, to)
+	terms, err := lc.GetAvailableTerms(serviceVariantId, from, to)
 	if err != nil {
 		fmt.Printf("get available visits: %s", err)
 		os.Exit(1)
 	}
 
-	fmt.Printf("result: %v", result)
+	fmt.Printf("result: %v", terms)
 }
